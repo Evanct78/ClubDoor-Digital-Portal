@@ -4,39 +4,85 @@ import { supabase } from '@/lib/supabase';
 import { useClub } from '@/context/ClubContext';
 import { useClubData } from '@/hooks/useClubData';
 
+import { Lock } from 'lucide-react';
+
 type Section = 'events' | 'polls' | 'announcements' | 'categories' | 'links' | 'whatsapp' | 'contacts';
 
-export function AdminContent() {
+type ModuleAccessFn = (moduleKey: string) => boolean;
+
+export function AdminContent({ hasModuleAccess, isFullPlan, isActive }: {
+  hasModuleAccess: ModuleAccessFn;
+  isFullPlan: boolean;
+  isActive: boolean;
+}) {
   const [section, setSection] = useState<Section>('events');
   const { reload } = useClubData();
+
+  const allSections: { key: Section; icon: typeof Calendar; label: string; moduleKey: string }[] = [
+    { key: 'events', icon: Calendar, label: 'Événements', moduleKey: 'events' },
+    { key: 'polls', icon: BarChart3, label: 'Sondages', moduleKey: 'polls' },
+    { key: 'announcements', icon: Megaphone, label: 'Infos', moduleKey: 'announcements' },
+    { key: 'categories', icon: Tag, label: 'Catégories', moduleKey: 'categories' },
+    { key: 'links', icon: LinkIcon, label: 'Liens', moduleKey: 'links' },
+    { key: 'whatsapp', icon: MessageCircle, label: 'WhatsApp', moduleKey: 'whatsapp' },
+    { key: 'contacts', icon: Phone, label: 'Contacts', moduleKey: 'contacts' },
+  ];
+
+  const accessibleSections = allSections.filter(s => hasModuleAccess(s.moduleKey));
+  const lockedSections = allSections.filter(s => !hasModuleAccess(s.moduleKey));
+  const currentLocked = !hasModuleAccess(section);
 
   return (
     <div className="mx-auto max-w-5xl space-y-4 px-4 py-6">
       <div className="animate-fade-in-up">
         <h1 className="gradient-text text-2xl font-bold">Gestion du contenu</h1>
-        <p className="mt-1 text-sm text-gray-500">Créez et organisez le contenu du club</p>
+        <p className="mt-1 text-sm text-gray-500">
+          {isFullPlan ? 'Créez et organisez le contenu du club' : 'Modules activés par votre abonnement'}
+        </p>
       </div>
 
-      {/* Section selector */}
+      {/* Section selector — only accessible modules */}
       <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
-        <SectionPill active={section === 'events'} onClick={() => setSection('events')} icon={Calendar} label="Événements" />
-        <SectionPill active={section === 'polls'} onClick={() => setSection('polls')} icon={BarChart3} label="Sondages" />
-        <SectionPill active={section === 'announcements'} onClick={() => setSection('announcements')} icon={Megaphone} label="Infos" />
-        <SectionPill active={section === 'categories'} onClick={() => setSection('categories')} icon={Tag} label="Catégories" />
-        <SectionPill active={section === 'links'} onClick={() => setSection('links')} icon={LinkIcon} label="Liens" />
-        <SectionPill active={section === 'whatsapp'} onClick={() => setSection('whatsapp')} icon={MessageCircle} label="WhatsApp" />
-        <SectionPill active={section === 'contacts'} onClick={() => setSection('contacts')} icon={Phone} label="Contacts" />
+        {accessibleSections.map(s => (
+          <SectionPill key={s.key} active={section === s.key} onClick={() => setSection(s.key)} icon={s.icon} label={s.label} />
+        ))}
       </div>
 
-      <div className="animate-fade-in">
-        {section === 'events' && <EventManager onReload={reload} />}
-        {section === 'polls' && <PollManager onReload={reload} />}
-        {section === 'announcements' && <AnnouncementManager onReload={reload} />}
-        {section === 'categories' && <CategoryManager onReload={reload} />}
-        {section === 'links' && <LinkManager onReload={reload} />}
-        {section === 'whatsapp' && <WhatsAppManager onReload={reload} />}
-        {section === 'contacts' && <ContactManager onReload={reload} />}
-      </div>
+      {/* Content area */}
+      {currentLocked || accessibleSections.length === 0 ? (
+        <div className="rounded-2xl border-2 border-dashed border-amber-200 bg-amber-50 p-8 text-center">
+          <Lock className="mx-auto mb-3 h-8 w-8 text-amber-500" />
+          <p className="text-sm font-medium text-amber-900">Ce module n'est pas inclus dans votre abonnement</p>
+          <p className="mt-1 text-xs text-amber-700">Mettez à niveau votre abonnement pour accéder à cet outil</p>
+        </div>
+      ) : (
+        <div className="animate-fade-in">
+          {section === 'events' && hasModuleAccess('events') && <EventManager onReload={reload} />}
+          {section === 'polls' && hasModuleAccess('polls') && <PollManager onReload={reload} />}
+          {section === 'announcements' && hasModuleAccess('announcements') && <AnnouncementManager onReload={reload} />}
+          {section === 'categories' && hasModuleAccess('categories') && <CategoryManager onReload={reload} />}
+          {section === 'links' && hasModuleAccess('links') && <LinkManager onReload={reload} />}
+          {section === 'whatsapp' && hasModuleAccess('whatsapp') && <WhatsAppManager onReload={reload} />}
+          {section === 'contacts' && hasModuleAccess('contacts') && <ContactManager onReload={reload} />}
+        </div>
+      )}
+
+      {/* Locked modules preview */}
+      {lockedSections.length > 0 && (
+        <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="mb-3 flex items-center gap-2">
+            <Lock className="h-4 w-4 text-amber-500" />
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-900">Modules non inclus</h2>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {lockedSections.map(s => (
+              <span key={s.key} className="flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1.5 text-xs text-gray-400">
+                <Lock className="h-3 w-3" /> {s.label}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

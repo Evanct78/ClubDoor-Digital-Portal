@@ -10,18 +10,41 @@ type ClubContextType = {
   isAdmin: boolean;
   selectClub: (clubId: string) => void;
   refreshClubs: () => Promise<void>;
+  // Super-admin can visit any club's admin space
+  visitClubAsSuperAdmin: (clubId: string) => void;
+  isVisitingAsSuperAdmin: boolean;
+  exitVisit: () => void;
 };
 
 const ClubContext = createContext<ClubContextType | undefined>(undefined);
 
 export function ClubProvider({ children }: { children: ReactNode }) {
-  const { memberships, user } = useAuth();
+  const { memberships, user, isSuperAdmin } = useAuth();
   const [clubs, setClubs] = useState<Club[]>([]);
   const [currentClub, setCurrentClub] = useState<Club | null>(null);
   const [loading, setLoading] = useState(true);
   const [currentMembership, setCurrentMembership] = useState<{ role: string } | null>(null);
+  const [isVisitingAsSuperAdmin, setIsVisitingAsSuperAdmin] = useState(false);
 
   const loadClubs = useCallback(async () => {
+    // Super-admin visiting a specific club
+    const visitingId = localStorage.getItem('clubdoor_visiting_club');
+    if (isSuperAdmin && visitingId) {
+      const { data: club } = await supabase
+        .from('clubs')
+        .select('*')
+        .eq('id', visitingId)
+        .maybeSingle();
+      if (club) {
+        setClubs([club as Club]);
+        setCurrentClub(club as Club);
+        setIsVisitingAsSuperAdmin(true);
+        setCurrentMembership({ role: 'admin' });
+        setLoading(false);
+        return;
+      }
+    }
+
     if (!memberships.length) {
       setClubs([]);
       setCurrentClub(null);
@@ -47,7 +70,7 @@ export function ClubProvider({ children }: { children: ReactNode }) {
     setCurrentMembership(mem ? { role: mem.role } : null);
 
     setLoading(false);
-  }, [memberships]);
+  }, [memberships, isSuperAdmin]);
 
   useEffect(() => {
     loadClubs();
@@ -63,6 +86,23 @@ export function ClubProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const visitClubAsSuperAdmin = (clubId: string) => {
+    localStorage.setItem('clubdoor_visiting_club', clubId);
+    localStorage.removeItem('clubdoor_selected_club');
+    loadClubs();
+  };
+
+  const exitVisit = () => {
+    localStorage.removeItem('clubdoor_visiting_club');
+    setIsVisitingAsSuperAdmin(false);
+    setCurrentClub(null);
+    setClubs([]);
+    setCurrentMembership(null);
+    setLoading(true);
+    // Reload will happen via the auth state change or page refresh
+    window.location.reload();
+  };
+
   const refreshClubs = async () => {
     await loadClubs();
   };
@@ -70,7 +110,7 @@ export function ClubProvider({ children }: { children: ReactNode }) {
   const isAdmin = currentMembership?.role === 'admin';
 
   return (
-    <ClubContext.Provider value={{ currentClub, clubs, loading, isAdmin, selectClub, refreshClubs }}>
+    <ClubContext.Provider value={{ currentClub, clubs, loading, isAdmin, selectClub, refreshClubs, visitClubAsSuperAdmin, isVisitingAsSuperAdmin, exitVisit }}>
       {children}
     </ClubContext.Provider>
   );

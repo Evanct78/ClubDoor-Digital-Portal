@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { LayoutDashboard, Wrench, Users, DoorOpen, LogOut, QrCode } from 'lucide-react';
+import { LayoutDashboard, Wrench, Users, DoorOpen, LogOut, QrCode, Lock } from 'lucide-react';
 import { useClub } from '@/context/ClubContext';
 import { useAuth } from '@/context/AuthContext';
+import { useSubscription } from '@/hooks/useSubscription';
 import { AdminDashboard } from './AdminDashboard';
 import { AdminContent } from './AdminContent';
 import { AdminMembers } from './AdminMembers';
@@ -12,12 +13,13 @@ type Tab = 'dashboard' | 'content' | 'members' | 'more';
 export function AdminApp() {
   const { currentClub } = useClub();
   const { signOut } = useAuth();
+  const { isActive, isFullPlan, hasModuleAccess } = useSubscription(currentClub?.id);
   const [tab, setTab] = useState<Tab>('dashboard');
 
-  const navItems: { key: Tab; icon: typeof Users; label: string }[] = [
+  const navItems: { key: Tab; icon: typeof Users; label: string; locked?: boolean }[] = [
     { key: 'dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-    { key: 'content', icon: Wrench, label: 'Contenu' },
-    { key: 'members', icon: Users, label: 'Membres' },
+    { key: 'content', icon: Wrench, label: 'Contenu', locked: !isActive },
+    { key: 'members', icon: Users, label: 'Membres', locked: !isActive && !isFullPlan },
     { key: 'more', icon: QrCode, label: 'Plus' },
   ];
 
@@ -43,14 +45,17 @@ export function AdminApp() {
               onClick={() => setTab(item.key)}
               icon={item.icon}
               label={item.label}
+              locked={item.locked}
             />
           ))}
         </nav>
 
         <div className="border-t border-white/10 px-3 py-4">
           <div className="mb-2 flex items-center gap-2 rounded-xl bg-white/5 px-3 py-2">
-            <div className="h-2 w-2 rounded-full bg-green-400 shadow-sm shadow-green-400/50" />
-            <span className="text-xs font-medium text-blue-200">Administrateur</span>
+            <div className={`h-2 w-2 rounded-full ${isActive ? 'bg-green-400 shadow-sm shadow-green-400/50' : 'bg-amber-400 shadow-sm shadow-amber-400/50'}`} />
+            <span className="text-xs font-medium text-blue-200">
+              {isActive ? (isFullPlan ? 'Abonnement complet' : 'Abonnement module') : 'Sans abonnement'}
+            </span>
           </div>
           <button
             onClick={signOut}
@@ -78,7 +83,7 @@ export function AdminApp() {
       <div className="md:pl-64">
         <main className="animate-fade-in pb-28 md:pb-0">
           {tab === 'dashboard' && <AdminDashboard />}
-          {tab === 'content' && <AdminContent />}
+          {tab === 'content' && <AdminContent hasModuleAccess={hasModuleAccess} isFullPlan={isFullPlan} isActive={isActive} />}
           {tab === 'members' && <AdminMembers />}
           {tab === 'more' && <AdminMore />}
         </main>
@@ -94,6 +99,7 @@ export function AdminApp() {
               onClick={() => setTab(item.key)}
               icon={item.icon}
               label={item.label}
+              locked={item.locked}
             />
           ))}
         </nav>
@@ -102,7 +108,7 @@ export function AdminApp() {
   );
 }
 
-function SideNavItem({ active, onClick, icon: Icon, label }: { active: boolean; onClick: () => void; icon: typeof Users; label: string }) {
+function SideNavItem({ active, onClick, icon: Icon, label, locked }: { active: boolean; onClick: () => void; icon: typeof Users; label: string; locked?: boolean }) {
   return (
     <button
       onClick={onClick}
@@ -114,12 +120,13 @@ function SideNavItem({ active, onClick, icon: Icon, label }: { active: boolean; 
     >
       <Icon className={`h-5 w-5 transition-transform ${active ? 'scale-110' : ''}`} />
       <span>{label}</span>
-      {active && <span className="ml-auto h-1.5 w-1.5 rounded-full bg-green-400 shadow-sm shadow-green-400/50" />}
+      {locked && <Lock className="ml-auto h-3.5 w-3.5 text-amber-400/70" />}
+      {active && !locked && <span className="ml-auto h-1.5 w-1.5 rounded-full bg-green-400 shadow-sm shadow-green-400/50" />}
     </button>
   );
 }
 
-function FloatingNavItem({ active, onClick, icon: Icon, label }: { active: boolean; onClick: () => void; icon: typeof Users; label: string }) {
+function FloatingNavItem({ active, onClick, icon: Icon, label, locked }: { active: boolean; onClick: () => void; icon: typeof Users; label: string; locked?: boolean }) {
   return (
     <button
       onClick={onClick}
@@ -141,7 +148,8 @@ function FloatingNavItem({ active, onClick, icon: Icon, label }: { active: boole
       >
         {label}
       </span>
-      {active && (
+      {locked && <Lock className="absolute top-0.5 right-1 h-2.5 w-2.5 text-amber-400" />}
+      {active && !locked && (
         <span className="absolute -top-0.5 left-1/2 h-0.5 w-6 -translate-x-1/2 rounded-full bg-gradient-to-r from-green-400 to-green-500 shadow-sm shadow-green-400/50" />
       )}
     </button>
